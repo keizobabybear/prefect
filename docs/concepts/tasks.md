@@ -24,6 +24,8 @@ search:
 
 A task is a function that represents a discrete unit of work in a Prefect workflow. Tasks are not required &mdash; you may define Prefect workflows that consist only of flows, using regular Python statements and functions. Tasks enable you to encapsulate elements of your workflow logic in observable units that can be reused across flows and subflows.
 
+You must call all tasks from within a flow. You cannot call tasks from other tasks. 
+
 ## Tasks overview
 
 Tasks are functions: they can take inputs, perform work, and return an output. A Prefect task can do almost anything a Python function can do.  
@@ -33,6 +35,67 @@ Tasks are special because they receive metadata about upstream dependencies and 
 Tasks also take advantage of automatic Prefect [logging](/concepts/logs/) to capture details about task runs such as runtime, tags, and final state.
 
 You can define your tasks within the same file as your flow definition, or you can define tasks within modules and import them for use in your flow definitions. All tasks must be called from within a flow. Tasks may not be called from other tasks.
+
+## Separating logic into tasks
+
+The simplest workflow is just a `@flow` function that does all the work of the workflow.
+
+```python
+from prefect import flow
+
+@flow(name="Hello Flow")
+def hello_world(name="world"):
+    print(f"Hello {name}!")
+
+if __name__ == "__main__":
+    hello_world("Marvin")
+```
+
+When you run this flow, you'll see output like the following:
+
+<div class="terminal">
+```bash
+$ python hello.py
+15:11:23.594 | INFO    | prefect.engine - Created flow run 'benevolent-donkey' for flow 'hello-world'
+15:11:23.594 | INFO    | Flow run 'benevolent-donkey' - Using task runner 'ConcurrentTaskRunner'
+Hello Marvin!
+15:11:24.447 | INFO    | Flow run 'benevolent-donkey' - Finished in state Completed()
+```
+</div>
+
+A better practice is to create `@task` functions that do the specific work of your flow, and use your `@flow` function as the conductor that orchestrates the flow of your application:
+
+```python
+from prefect import flow, task
+
+@task(name="Print Hello")
+def print_hello(name):
+    msg = f"Hello {name}!"
+    print(msg)
+    return msg
+
+@flow(name="Hello Flow")
+def hello_world(name="world"):
+    message = print_hello(name)
+
+if __name__ == "__main__":
+    hello_world("Marvin")
+```
+
+When you run this flow, you'll see the following output, which illustrates how the work is encapsulated in a task run.
+
+<div class="terminal">
+```bash
+$ python hello.py
+15:15:58.673 | INFO    | prefect.engine - Created flow run 'loose-wolverine' for flow 'Hello Flow'
+15:15:58.674 | INFO    | Flow run 'loose-wolverine' - Using task runner 'ConcurrentTaskRunner'
+15:15:58.973 | INFO    | Flow run 'loose-wolverine' - Created task run 'Print Hello-84f0fe0e-0' for task 'Print Hello'
+Hello Marvin!
+15:15:59.037 | INFO    | Task run 'Print Hello-84f0fe0e-0' - Finished in state Completed()
+15:15:59.568 | INFO    | Flow run 'loose-wolverine' - Finished in state Completed('All states completed.')
+```
+</div>
+
 
 **Calling a task from a flow**
 
